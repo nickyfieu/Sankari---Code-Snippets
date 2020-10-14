@@ -1,7 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
-
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "AbilityBase.h"
@@ -17,15 +14,15 @@ public:
 	UAbilityUserComponent();
 
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
-		void UseAbility(int index);
+		void UseAbility(int32 index);
 
 	UFUNCTION(BlueprintCallable, Category = "Abilities")
 		void AddAbility(class UChildActorComponent* abilityToAdd, class UTexture2D* abilityUIIcon = nullptr);
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "Abilities")
-		FAbilityInfo GetAbilityInfo(int index) const;
+		FAbilityInfo GetAbilityInfo(int32 index) const;
 	
-	void SetAbilityAtIndex(int index, FAbilityInfo newAbility);
+	void SetAbilityAtIndex(int32 index, FAbilityInfo newAbility);
 
 protected:
 	virtual void BeginPlay() override;
