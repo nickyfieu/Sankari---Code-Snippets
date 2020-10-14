@@ -1,9 +1,8 @@
 #include "AIPathNetwork.h"
 #include "Kismet/KismetSystemLibrary.h"
-#include "../Helpers.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
-#include <set>
+#include "../Helpers.h"
 
 //
 // AIPathNetwork
@@ -84,13 +83,14 @@ void AAIPathNetwork::DebugDraw()
 
 	int32 amountOfNodes = m_NodeContainer.Num();
 	FTransform actorTransform = this->GetTransform();
-	for (FAIPathNode& node : m_NodeContainer)
+	for (int32 i = 0; i < amountOfNodes; i++)
 	{
-		for (int nodeIndex : node.m_ConnectedNodeIndexes)
+		const FAIPathNode& currentNode = m_NodeContainer[i];
+		for (int32 nodeIndex : currentNode.m_ConnectedNodeIndexes)
 		{
 			const FAIPathNode& otherNode = m_NodeContainer[nodeIndex];
-			DrawDebugLines(actorTransform, node, otherNode);
-			DrawDebugArrow(actorTransform, node, otherNode);
+			DrawDebugLines(actorTransform, currentNode, otherNode);
+			DrawDebugArrow(actorTransform, currentNode, otherNode);
 		}
 	}
 }
@@ -143,9 +143,9 @@ void AAIPathNetwork::DrawDebugArrow(const FTransform& actorTransform, const FAIP
 /// </summary>
 void AAIPathNetwork::Initialize()
 {
+	m_AmountOfNodes = m_NodeContainer.Num(); // do not move this line below InitializeStoredPathData or there will be some issues
 	InitializeNodes();
 	InitializeStoredPathData();
-	m_AmountOfNodes = m_NodeContainer.Num();
 }
 
 
@@ -155,10 +155,10 @@ void AAIPathNetwork::Initialize()
 /// </summary>
 void AAIPathNetwork::InitializeNodes()
 {
-	for (FAIPathNode& node : m_NodeContainer)
+	for (int32 i = 0; i < m_AmountOfNodes; i++)
 	{
-		node.SetNetworkReference(this);
-		node.Initialize();
+		m_NodeContainer[i].SetNetworkReference(this);
+		m_NodeContainer[i].Initialize();
 	}
 }
 
@@ -170,10 +170,11 @@ void AAIPathNetwork::InitializeNodes()
 void AAIPathNetwork::InitializeStoredPathData()
 {
 	TArray<FAIPathData> emptyArr{};
-	m_StoredPathData.clear();
-	for (int i = 0; i < m_AmountOfNodes; i++)
+	m_StoredPathData.Empty(); // making sure the stored path data is empty
+	m_StoredPathData.Reserve(m_AmountOfNodes); // pre alocates enough memory for the array
+	for (int32 i = 0; i < m_AmountOfNodes; i++)
 	{
-		m_StoredPathData.emplace(std::make_pair(i, emptyArr));
+		m_StoredPathData.Add(TPair<int32, TArray<FAIPathData>>(i, emptyArr));
 	}
 }
 
@@ -185,23 +186,35 @@ void AAIPathNetwork::InitializeStoredPathData()
 /// for node at index "beginNode" then it stores it at m_StoredPathData["beginNode"].
 /// </summary>
 /// <param name="beginNode">The node index from wich all paths will be calculated from</param>
-void AAIPathNetwork::CalculatePathData(int beginNode)
+void AAIPathNetwork::CalculatePathData(int32 beginNode)
 {
 	// calculating path data using dijkstra
 
 	// distance, nodeIndex
-	std::set<std::pair<float, int>> toCheck;
-	std::vector<std::pair<float, int>> distances(m_AmountOfNodes, std::make_pair(FLT_MAX, -1));
-	distances[beginNode] = std::make_pair(0.0f, beginNode);
-	toCheck.insert(distances[beginNode]);
+	TSet<TPair<float, int32>> toCheck{};
 
-	while (!toCheck.empty())
+	TPair<float, int32> intializer = TPair<float, int32>(FLT_MAX, -1);
+	TArray<TPair<float, int32>> distances{};
+	
+	// initializing the distances array
+	distances.Reserve(m_AmountOfNodes);
+	for (int32 i = 0; i < m_AmountOfNodes; i++)
 	{
-		std::pair<float, int> currentCheck = *(toCheck.begin());
-		toCheck.erase(toCheck.begin());
+		distances.Add(intializer);
+	}
+	
+	// setting up start of algorithm
+	distances[beginNode] = TPair<float, int32>(0.0f, beginNode);
+	toCheck.Add(distances[beginNode]);
 
-		int currentIndex = currentCheck.second;
-		FAIPathNode currentNode = m_NodeContainer[currentIndex];
+	while (toCheck.Num() != 0) // this means we still have paths to check
+	{
+		TPair<float, int32> currentCheck = *toCheck.begin();
+		toCheck.Remove(currentCheck);
+		toCheck.Shrink();
+
+		int32 currentIndex = currentCheck.Value;
+		const FAIPathNode& currentNode = m_NodeContainer[currentIndex];
 		int32 amountOfConnectedNodes = currentNode.m_ConnectedNodeIndexes.Num();
 
 		for (int32 i = 0; i < amountOfConnectedNodes; i++)
@@ -209,27 +222,30 @@ void AAIPathNetwork::CalculatePathData(int beginNode)
 			int otherIndex = currentNode.m_ConnectedNodeIndexes[i];
 			float otherWeight = currentNode.GetConnectedNodeWeight(i);
 
-			// if shorter path update it
-			if (distances[otherIndex].first > (distances[currentIndex].first + otherWeight))
+			if (!(distances[otherIndex].Key > (distances[currentIndex].Key + otherWeight)))
 			{
-				// if not max its in our toCheck already
-				// so reinsert it with the new smaller weight
-				if (distances[otherIndex].first != FLT_MAX)
-				{
-					toCheck.erase(toCheck.find(std::make_pair(distances[otherIndex].first, otherIndex)));
-				}
-
-				distances[otherIndex] = std::make_pair(distances[currentIndex].first + otherWeight, currentIndex);
-				toCheck.insert(std::make_pair(distances[otherIndex].first, otherIndex));
+				continue;
 			}
+			// if shorter path update it
+			
+			// if not max its in our toCheck already
+			// so reinsert it with the new smaller weight
+			if (distances[otherIndex].Key != FLT_MAX)
+			{
+				toCheck.Remove(TPair<float, int32>(distances[otherIndex].Key, otherIndex));
+				toCheck.Shrink();
+			}
+
+				distances[otherIndex] = TPair<float, int32>(distances[currentIndex].Key + otherWeight, currentIndex);
+				toCheck.Add(TPair<float, int32>(distances[otherIndex].Key, otherIndex));
 		}
 	}
 
 	TArray<FAIPathData>& storedPathDataRef = m_StoredPathData[beginNode];
-	storedPathDataRef.Empty();
-	for (int i = 0; i < m_AmountOfNodes; i++)
+	storedPathDataRef.Empty(); // makes sure TArray is empty 
+	for (int32 i = 0; i < m_AmountOfNodes; i++)
 	{
-		storedPathDataRef.Add(FAIPathData(distances[i].first, distances[i].second));
+		storedPathDataRef.Add(FAIPathData(distances[i].Key, distances[i].Value));
 	}
 }
 
@@ -242,10 +258,12 @@ void AAIPathNetwork::CalculatePathData(int beginNode)
 /// </summary>
 /// <param name="beginNode">the node where the path data begins from</param>
 /// <returns>stored path data from the beginNode</returns>
-TArray<FAIPathData> AAIPathNetwork::GetPathData(int beginNode)
+TArray<FAIPathData>& AAIPathNetwork::GetPathData(int32 beginNode)
 {
 	if (m_StoredPathData[beginNode].Num() == m_AmountOfNodes) // means it already was calculated and stored
+	{
 		return m_StoredPathData[beginNode];
+	}
 
 	CalculatePathData(beginNode);
 
@@ -263,7 +281,9 @@ void AAIPathNetwork::HandleDelete(AActor* toDelete)
 {
 	UWorld* pWorld = GetWorld();
 	if (pWorld != nullptr)
+	{
 		UKismetSystemLibrary::FlushPersistentDebugLines(pWorld);
+	}
 }
 
 
@@ -272,9 +292,9 @@ void AAIPathNetwork::HandleDelete(AActor* toDelete)
 /// This function gets called when bleuprint editor viewport gets closed.
 /// This fixes the kismet debug lines + arrows disapearing after closing the bleuprint editor viewport.
 /// </summary>
-/// <param name="pWorld">unused parameter</param>
-/// <param name="b1">unused parameter</param>
-/// <param name="b2">unused parameter</param>
+/// <param name="pWorld">Unused parameter</param>
+/// <param name="b1">Unused parameter</param>
+/// <param name="b2">Unused parameter</param>
 void AAIPathNetwork::HandleCleanup(UWorld* pWorld, bool b1, bool b2)
 {
 	DebugDraw();
@@ -286,10 +306,10 @@ void AAIPathNetwork::HandleCleanup(UWorld* pWorld, bool b1, bool b2)
 /// Does some preChecks to see if a path is possible if so it will return a valid path 
 /// using the given data in order from closest node to the end node.
 /// </summary>
-/// <param name="pathData">the pathdata gotten from GetPathData(index) using the given index</param>
-/// <param name="toNode">node index of the node you want to move towards</param>
+/// <param name="pathData">The pathdata gotten from GetPathData(index) using the given index</param>
+/// <param name="toNode">Node index of the node you want to move towards</param>
 /// <returns>Returns the path to traverse to get to the given toNode index</returns>
-FAIPath AAIPathNetwork::GetPathFromTo(const TArray<FAIPathData>& pathData, int toNode) const
+FAIPath AAIPathNetwork::GetPathFromTo(const TArray<FAIPathData>& pathData, int32 toNode) const
 {
 	FAIPath path{};
 	int32 pathDataSize = pathData.Num();
@@ -309,21 +329,23 @@ FAIPath AAIPathNetwork::GetPathFromTo(const TArray<FAIPathData>& pathData, int t
 
 	if (pathData[toNode].m_PreviousNodeIndex == -1)
 	{
-		// non existent path
+		LogText(ELogVerbosity::Warning, "AAIPathNetwork::GetPathFromTo cannot reach targetNode [ " + FString::FromInt(toNode) + " ]");
 		return path;
 	}
 
 	// when all prechecks are done we know we have a valid path for sure
 	path.m_bIsValid = true;
-	int currentToNode = toNode;
+	int32 currentToNode = toNode;
+
+	// adding all the nodes to traverse to an array
 	while (currentToNode != pathData[currentToNode].m_PreviousNodeIndex)
 	{
 		path.m_Path.Add(currentToNode);
 		currentToNode = pathData[currentToNode].m_PreviousNodeIndex;
 	}
 	path.m_Path.Add(currentToNode); // adding the final node ( first node )
-	std::reverse(std::begin(path.m_Path), std::end(path.m_Path));
 
+	Algo::Reverse(path.m_Path); // reversing the path so we start with the begin node
 	return path;
 }
 
@@ -332,15 +354,15 @@ FAIPath AAIPathNetwork::GetPathFromTo(const TArray<FAIPathData>& pathData, int t
 /// <summary>
 /// Calculates the closest node in this node network from the given vector "Location".
 /// </summary>
-/// <param name="location">worldposition of an object</param>
-/// <returns>the node index of the closest node</returns>
-int AAIPathNetwork::LocationToNodeIndex(const FVector& location) const
+/// <param name="location">Worldposition of an object</param>
+/// <returns>The node index of the closest node</returns>
+int32 AAIPathNetwork::LocationToNodeIndex(const FVector& location) const
 {
-	int nodeIndex = -1;
+	int32 nodeIndex = -1;
 	float distanceSquared = FLT_MAX;
 	FVector ownLocation = this->GetActorLocation();
 
-	for (int i = 0; i < m_AmountOfNodes; i++)
+	for (int32 i = 0; i < m_AmountOfNodes; i++)
 	{
 		float sqDistCalc = FVector::DistSquared(ownLocation + m_NodeContainer[i].m_Location, location);
 		if (sqDistCalc < distanceSquared)
@@ -375,7 +397,7 @@ void FAIPathNode::Initialize()
 }
 
 /// <summary>
-/// This function calculates all the squared distances towards all connected nodes of this node
+/// This function calculates all the squared distances towards all connected nodes of this node.
 /// </summary>
 void FAIPathNode::CalculateSquareDistances()
 {
@@ -390,9 +412,17 @@ void FAIPathNode::CalculateSquareDistances()
 	m_ConnectedSquaredDistances.Reserve(nrOfConnectedNodes);
 	for (int32 i = 0; i < nrOfConnectedNodes; i++)
 	{
-		check(m_ConnectedNodeIndexes[i] < nrOfNodes);
-		FAIPathNode& other = m_pNetworkReference->m_NodeContainer[m_ConnectedNodeIndexes[i]];
-		m_ConnectedSquaredDistances.Add(FVector::DistSquared(this->m_Location, other.m_Location));
+		if (m_ConnectedNodeIndexes[i] >= nrOfNodes)
+		{
+			check(false);
+			LogText(ELogVerbosity::Error, "FAIPathNode::CalculateSquareDistances invalid connected node index[ " + FString::FromInt(m_ConnectedNodeIndexes[i]) + " ] setting it to 0");
+			m_ConnectedNodeIndexes[i] = 0;
+		}
+		else
+		{
+			FAIPathNode& other = m_pNetworkReference->m_NodeContainer[m_ConnectedNodeIndexes[i]];
+			m_ConnectedSquaredDistances.Add(FVector::DistSquared(this->m_Location, other.m_Location));
+		}
 	}
 }
 
@@ -401,27 +431,32 @@ void FAIPathNode::CalculateSquareDistances()
 // setters & getters
 
 /// <summary>
-/// Sets the network reference to be used in calculating the squared distances
+/// Sets the network reference to be used in calculating the squared distances.
 /// </summary>
-/// <param name="pNetworkRef">reference of the owning AIPathNetwork object</param>
+/// <param name="pNetworkRef">Reference of the owning AIPathNetwork object</param>
 void FAIPathNode::SetNetworkReference(AAIPathNetwork* pNetworkRef)
 {
+	if (pNetworkRef != nullptr)
+	{
+		m_pNetworkReference = pNetworkRef;
+		return;
+	}
 	// the given pointer shouldn't be a nullptr
-	ensure(pNetworkRef != nullptr);
-	m_pNetworkReference = pNetworkRef;
+	check(false);
+	return LogText(ELogVerbosity::Warning, "FAIPathNode::SetNetworkReference the given network reference was nullptr!");
 }
 
 
 
 /// <summary>
-/// returns the calculated squared distances using the given node index
+/// Returns the calculated squared distances using the given node index.
+/// Returns float max when invalid node.
 /// </summary>
-/// <param name="nodeIndex">other node index to get distance to from</param>
-/// <returns>squared distance towards nodeIndex from self</returns>
-float FAIPathNode::GetConnectedNodeWeight(int nodeIndex) const
+/// <param name="nodeIndex">Other node index to get distance to from</param>
+/// <returns>Squared distance towards nodeIndex from self</returns>
+float FAIPathNode::GetConnectedNodeWeight(int32 nodeIndex) const
 {
-	check(nodeIndex < m_ConnectedSquaredDistances.Num());
-	return m_ConnectedSquaredDistances[nodeIndex];
+	return IsValidIndex(nodeIndex, m_ConnectedSquaredDistances) ? m_ConnectedSquaredDistances[nodeIndex] : FLT_MAX;
 }
 
 //
@@ -436,7 +471,7 @@ FAIPath::FAIPath()
 // AIPathData
 //
 
-FAIPathData::FAIPathData(float dist, int prevNode)
+FAIPathData::FAIPathData(float dist, int32 prevNode)
 	: m_SquaredDistance{ dist }
 	, m_PreviousNodeIndex{ prevNode }
 {
