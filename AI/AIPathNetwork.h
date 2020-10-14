@@ -1,8 +1,6 @@
 #pragma once
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include <unordered_map>
-#include <vector>
 #include "AIPathNetwork.generated.h"
 
 USTRUCT(BlueprintType)
@@ -10,12 +8,12 @@ struct FAIPathData
 {
 	GENERATED_BODY()
 
-	FAIPathData(float dist = 0.0f, int prevNode = -1);
+	FAIPathData(float dist = 0.0f, int32 prevNode = -1);
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AIPathNetwork", Meta = (DisplayName = "squared Distance"))
 		float m_SquaredDistance;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AIPathNetwork", Meta = (DisplayName = "previous Node Index"))
-		int m_PreviousNodeIndex;
+		int32 m_PreviousNodeIndex;
 };
 
 USTRUCT(BlueprintType)
@@ -31,13 +29,13 @@ struct FAIPathNode
 
 	// this contains all indexes of all connected nodes ( meaning you can move from this node to the connected node )
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AIPathNetwork", Meta = (DisplayName = "ConnectedNodeIndexes"))
-		TArray<int> m_ConnectedNodeIndexes;
+		TArray<int32> m_ConnectedNodeIndexes;
 
 	void Initialize();
 
 	void SetNetworkReference(class AAIPathNetwork* pNetworkRef);
 
-	float GetConnectedNodeWeight(int nodeIndex) const;
+	float GetConnectedNodeWeight(int32 nodeIndex) const;
 
 private:
 	// used to get m_NodeContainer;
@@ -61,7 +59,7 @@ struct FAIPath
 		bool m_bIsValid = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "AIPathNetwork", Meta = (DisplayName = "path"))
-		TArray<int> m_Path;
+		TArray<int32> m_Path;
 };
 
 UCLASS()
@@ -82,7 +80,7 @@ public:
 		float m_DebugLineWidth = 6.5f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug_AIPathNetwork", Meta = (DisplayName = "Line Color"))
-		FLinearColor m_DebugLineColor;
+		FLinearColor m_DebugLineColor = FLinearColor::Black;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug_AIPathNetwork", Meta = (DisplayName = "Arrow Length Percentage"))
 		float m_DebugArrowLength = 0.1f;
@@ -97,19 +95,19 @@ public:
 		FVector m_DebugArrowOffset = FVector(0.0f,0.0f,10.0f);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Debug_AIPathNetwork", Meta = (DisplayName = "Arrow Color"))
-		FLinearColor m_DebugArrowColor;
+		FLinearColor m_DebugArrowColor = FLinearColor::Black;
 
 #pragma endregion
 
 	UFUNCTION(BlueprintCallable, Category = "AIPathNetwork")
-		int LocationToNodeIndex(const FVector& location) const;
+		int32 LocationToNodeIndex(const FVector& location) const;
 
 	// not const due to if not cached it will have to calculate the path and store it
 	UFUNCTION(BlueprintCallable, Category = "AIPathNetwork")
-		TArray<FAIPathData> GetPathData(int beginNode);
+		TArray<FAIPathData>& GetPathData(int32 beginNode);
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, Category = "AIPathNetwork")
-		FAIPath GetPathFromTo(const TArray<FAIPathData>& pathData, int toNode) const;
+		FAIPath GetPathFromTo(const TArray<FAIPathData>& pathData, int32 toNode) const;
 
 protected:
 	virtual void BeginPlay() override;
@@ -139,12 +137,12 @@ private:
 	void InitializeStoredPathData();
 
 	// helper functions
-	void CalculatePathData(int beginNode);
+	void CalculatePathData(int32 beginNode);
 
 	// storing the distance and the previous node towards current node
 	// <current node, <distanceSquared, previous node towards current node>>
 	// if "previous node towards current node" = -1 means its an imposible path!
-	std::unordered_map<int, TArray<FAIPathData>> m_StoredPathData;
+	TMap<int32, TArray<FAIPathData>> m_StoredPathData; // TMAP is unreals version of std::unordered_map
 
-	int m_AmountOfNodes = 0;
+	int32 m_AmountOfNodes = 0;
 };
