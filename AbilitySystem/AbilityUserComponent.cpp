@@ -47,10 +47,12 @@ void UAbilityUserComponent::AddAbility(UChildActorComponent* abilityToAdd, UText
 /// </summary>
 /// <param name="index">Index to overwrite</param>
 /// <param name="newAbility"></param>
-void UAbilityUserComponent::SetAbilityAtIndex(int index, FAbilityInfo newAbility)
+void UAbilityUserComponent::SetAbilityAtIndex(int32 index, FAbilityInfo newAbility)
 {
 	if (!IsValidIndex(index, m_KnownAbilities))
+	{
 		return LogText(ELogVerbosity::Warning, "UAbilityUserComponent::SetAbilityAtIndex tried to set new ability at invalid index[ " + FString::FromInt(index) + " ]");
+	}
 
 	m_KnownAbilities[index] = newAbility;
 }
@@ -65,10 +67,14 @@ void UAbilityUserComponent::SetAbilityAtIndex(int index, FAbilityInfo newAbility
 bool UAbilityUserComponent::AbilityPreCheck(uint32 index) const
 {
 	if (!IsValidIndex(index, m_KnownAbilities))
+	{
 		return false;
+	}
 
 	if (m_KnownAbilities[index].m_pAbilityRef == nullptr)
+	{
 		return false;
+	}
 
 	return true;
 }
@@ -80,10 +86,12 @@ bool UAbilityUserComponent::AbilityPreCheck(uint32 index) const
 /// Passes a reference to the owning actor to use in the ability.
 /// </summary>
 /// <param name="index">Index of the ability to use</param>
-void UAbilityUserComponent::UseAbility(int index)
+void UAbilityUserComponent::UseAbility(int32 index)
 {
 	if (!AbilityPreCheck(index))
+	{
 		return LogText(ELogVerbosity::Warning, "UAbilityUserComponent::UseAbility preCheck failed!");
+	}
 
 	ensure(this->GetOwner() != nullptr); // the component is assumed to always have an owning actor!
 	m_KnownAbilities[index].m_pAbilityRef->UseAbility(this->GetOwner());
@@ -91,7 +99,7 @@ void UAbilityUserComponent::UseAbility(int index)
 
 
 
-FAbilityInfo UAbilityUserComponent::GetAbilityInfo(int index) const
+FAbilityInfo UAbilityUserComponent::GetAbilityInfo(int32 index) const
 {
 	return (AbilityPreCheck(index)) ? m_KnownAbilities[index] : FAbilityInfo();
 }
