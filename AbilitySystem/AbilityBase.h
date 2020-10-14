@@ -1,7 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
-
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "AbilityBase.generated.h"
@@ -13,14 +10,6 @@ enum class EAbilityType : uint8
 	ACTIVE = 0 UMETA(DisplayName = "Active"),
 	PASSIVE = 1 UMETA(DisplayName = "Passive")
 };
-
-// class of an active ability
-UENUM(BlueprintType)
-enum class EAbilityClass : uint8
-{
-	default = 0,
-};
-
 
 UCLASS()
 class SANKARI_API AAbilityBase : public AActor
